@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Xna.Framework;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,16 +11,22 @@ namespace Self_Driving_Car_Programming_Game
     public class Car
     {
         public int speed;
-        public string[] script;
+        Translator translator = new();
 
         public Car()
         {
 
         }
 
-        public void LoadScript()
+        public void LoadScript(string file)
         {
-            script = File.ReadAllLines("Autopilot.txt");
+            string[] script = File.ReadAllLines(file);
+            translator.Translate(script);
+        }
+
+        public void RunScript()
+        {
+            translator.Run(this);
         }
     }
 }
