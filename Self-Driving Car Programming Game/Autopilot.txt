@@ -1,1 +1,1 @@
-﻿set(speed, 90)
+﻿set(speed, math(100 + 90))

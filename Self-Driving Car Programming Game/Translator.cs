@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -26,14 +27,27 @@ namespace Self_Driving_Car_Programming_Game
             //numbers:
             integer,
             //functions:
-            set,
+            set, get, math,
             //brackets:
-            start, end
+            start, end,
+            //special chars
+            plus, minus, times, divided
         }
 
         public enum Type
         {
-            var, num, fun, brackets
+            var, num, fun, brackets, special
+        }
+
+        private void AddKeyWord(Type type, Name name, int value)
+        {
+            KeyWord key = new()
+            {
+                value = value,
+                type = type,
+                name = name
+            };
+            program.Add(key);
         }
 
         public void Translate(string[] lines)
@@ -44,52 +58,54 @@ namespace Self_Driving_Car_Programming_Game
                 string word = "";
                 for (int i = 0; i < line.Length; i++)
                 {
-                    if ("(), ".Contains(line[i]))
+                    if ("(), +-*/".Contains(line[i]))
                     {
-                        KeyWord key = new ();
-
-                        try ///check wheter it is a number
+                        try ///check whether it is a number
                         {
                             int number = Convert.ToInt32(word);
-                            key.value = number;
-                            key.type = Type.num;
-                            key.name = Name.integer;
-                            program.Add(key);
-                            key = new();
+                            AddKeyWord(Type.num, Name.integer, number);
                         }
                         catch
                         {
                             switch (word)
                             {
                                 case "set":
-                                    key.type = Type.fun;
-                                    key.name = Name.set;
-                                    program.Add(key);
-                                    key = new();
+                                    AddKeyWord(Type.fun, Name.set, 0);
+                                    break;
+
+                                case "math":
+                                    AddKeyWord(Type.fun, Name.math, 0);
                                     break;
 
                                 case "speed":
-                                    key.type = Type.var;
-                                    key.name = Name.speed;
-                                    program.Add(key);
-                                    key = new();
+                                    AddKeyWord(Type.var, Name.speed, 0);
                                     break;                               
                             }
                         }
                         switch (line[i])
                         {
                             case '(':
-                                key.type = Type.brackets;
-                                key.name = Name.start;
-                                program.Add(key);
-                                key = new();
+                                AddKeyWord(Type.brackets, Name.start, 0);
                                 break;
 
                             case ')':
-                                key.type = Type.brackets;
-                                key.name = Name.end;
-                                program.Add(key);
-                                key = new();
+                                AddKeyWord(Type.brackets, Name.end, 0);
+                                break;
+
+                            case '+':
+                                AddKeyWord(Type.special, Name.plus, 0);
+                                break;
+
+                            case '-':
+                                AddKeyWord(Type.special, Name.minus, 0);
+                                break;
+
+                            case '*':
+                                AddKeyWord(Type.special, Name.times, 0);
+                                break;
+
+                            case '/':
+                                AddKeyWord(Type.special, Name.divided, 0);
                                 break;
                         }
                         word = "";                      
@@ -109,28 +125,26 @@ namespace Self_Driving_Car_Programming_Game
                 switch (program[i].type)
                 {
                     case Type.fun:
-                        //RunFun();
-                        int start, end;
-                        FindBrackets(program, i, program.Count - i, out start, out end);
-                        List<KeyWord> subprogram = program.GetRange(start + 1, end - start);
+                        List<KeyWord> subprogram = FindSubProg(program, i + 1);
                         switch (program[i].name)
                         {                                                       
                             case Name.set:
-                                RunSet(car, subprogram);
-                                break;
+                                RunSet(car, subprogram); 
+                                break;                          
                         }
-                        i = end;
+                        i += subprogram.Count + 2; //also with brackets
                         break;
                 }
             }
         }
 
-        private void FindBrackets(List<KeyWord> program, int startIndex, int endIndex, out int startBracket, out int endBracket)
+        private void FindBrackets(List<KeyWord> program, int startIndex, int endIndex, 
+            out int startBracket, out int endBracket) //returns index of first and last bracket
         {
             Stack<int> stack = new();
             startBracket = -1;
             endBracket = -1;
-            for (int i = startIndex + 1; startIndex <= endIndex; i++)
+            for (int i = startIndex; i <= endIndex; i++)
             {
                 if (program[i].name == Name.start)
                 {
@@ -141,34 +155,102 @@ namespace Self_Driving_Car_Programming_Game
                     startBracket = stack.Pop();
                     endBracket = i;
                 }
-
-                if (stack.Count == 0) break;
             }
+            if (stack.Count != 0) throw new Exception("end bracket missing!");
+        }
+
+        private List<KeyWord> FindSubProg(List<KeyWord> program, int index)
+        {
+            int start, end;
+            FindBrackets(program, index, program.Count - 1, out start, out end);
+            if ((start == -1) || (end == -1))
+            {
+                return program.GetRange(0, 1);
+            }
+            else
+            {
+                return program.GetRange(start + 1, end - start - 1);
+            }               
         }
 
         private void RunSet(Car car, List<KeyWord> subprogram) //set(var, number)
         {
             KeyWord _var = new ();
             _var.type = Type.var;
-            switch (subprogram[1].type)
-            {
-                /*case Type.function:
-                    _var.value = RunFun();
-                    break;*/
-                case Type.num:
-                    _var.value = subprogram[1].value;
-                    break;
-                case Type.var:
-                    _var.value = subprogram[1].value;
-                    break;
-            }
 
+            //get value
+            _var.value = RunGet<int>(subprogram[1], FindSubProg(subprogram, 2));
+
+            //set value
             switch (subprogram[0].name)
             {
                 case Name.speed:
                     car.speed = _var.value;
                     break;
             }
+        }
+
+        private T RunGet<T>(KeyWord function, List<KeyWord> subprogram)
+        {
+            if (typeof(T) == typeof(int))
+            {
+                int intValue = 0;
+
+                if ((function.type == Type.var) || (function.type == Type.num))
+                {
+                    intValue = function.value;
+                    return (T)Convert.ChangeType(intValue, typeof(T));
+                }  
+
+                switch (function.name)
+                {
+                    case Name.math:
+                        intValue = RunMath(subprogram);
+                        break;
+                }
+                
+                return (T)Convert.ChangeType(intValue, typeof(T));
+            }
+
+            else if (typeof(T) == typeof(bool))
+            {
+                bool boolValue = false;
+                
+                return (T)Convert.ChangeType(boolValue, typeof(T));
+            }
+
+            else //should not be called
+            {
+                return (T)Convert.ChangeType(0, typeof(T));
+            }
+        }
+
+        private int RunMath(List<KeyWord> subprogram)
+        {
+            List<KeyWord> sub1 = FindSubProg(subprogram, 0);
+            int a = RunGet<int>(subprogram[0], sub1);
+
+            int middle = subprogram.FindIndex(x => x.type == Type.special);
+
+            List<KeyWord> sub2 = FindSubProg(subprogram, middle + 1);
+            int b = RunGet<int>(subprogram[middle + 1], sub2);
+
+            switch (subprogram[middle].name)
+            {
+                case Name.plus:
+                    return a + b;
+
+                case Name.minus:
+                    return a - b;
+
+                case Name.times:
+                    return a * b;
+
+                case Name.divided:
+                    return a / b;
+            }
+
+            return 0; //should not be called
         }
     }
 }
